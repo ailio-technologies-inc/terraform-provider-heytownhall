@@ -4,7 +4,7 @@ Manage a [Hey Town Hall Data](https://data.heytownhall.com) organisation as code
 
 The provider talks to the management API at `https://data.heytownhall.com/v1/management`. It is not the data API: it does not read meetings or bylaws.
 
-Status: pre-release.
+Status: pre-release. The provider is not on the Terraform Registry yet, and the management API it calls is not yet live at data.heytownhall.com, so `terraform init` will not find it today. This repository is where it is being built.
 
 ## Install
 
