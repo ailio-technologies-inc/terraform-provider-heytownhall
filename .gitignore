@@ -1,0 +1,6 @@
+dist/
+*.test
+.terraform/
+*.tfstate*
+terraform-provider-heytownhall
+coverage.out
