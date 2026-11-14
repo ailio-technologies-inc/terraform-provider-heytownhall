@@ -77,6 +77,10 @@ The API never returns the client secret, so Terraform cannot detect that it was 
 
 DNS changes take time to spread. `heytownhall_sso_domain_verification` checks every ten seconds and gives up after ten minutes. Change that with `timeouts = { create = "30m" }`. If it gives up, apply again: the resource is not in the state, so it waits again.
 
+## Keep the DNS record
+
+Turning the connection on, and enforcing it, make the API check the TXT record again. If the record is gone, the API answers `domain_not_verified` and the domain reads as unverified, and the next plan verifies it again. Leave the record published for as long as the connection is in use.
+
 ## Removing
 
 Destroying `heytownhall_sso_activation` turns the connection off and stops enforcing it. Destroying a domain or the connection removes it.

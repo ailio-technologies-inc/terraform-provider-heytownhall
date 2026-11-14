@@ -86,6 +86,16 @@ type SSOConnection struct {
 	Enforced             bool        `json:"enforced"`
 	RedirectURI          string      `json:"redirect_uri"`
 	Domains              []SSODomain `json:"domains"`
+	Discovery            *Discovery  `json:"discovery"`
+}
+
+// Discovery is what the API read from the identity provider's discovery document.
+type Discovery struct {
+	AuthorizationEndpoint   string `json:"authorization_endpoint"`
+	TokenEndpoint           string `json:"token_endpoint"`
+	JWKSURI                 string `json:"jwks_uri"`
+	TokenEndpointAuthMethod string `json:"token_endpoint_auth_method"`
+	RefreshedAt             string `json:"refreshed_at"`
 }
 
 // SSOConnectionCreate is the body of a create.
@@ -148,6 +158,11 @@ type Usage struct {
 	SandboxRequests int64   `json:"sandbox_requests"`
 	SpendCapCents   *int64  `json:"spend_cap_cents"`
 	CountedThrough  *string `json:"counted_through"`
+
+	MinimumInvoiceCents *int64 `json:"minimum_invoice_cents"`
+	CarriedForward      *struct {
+		Cents int64 `json:"cents"`
+	} `json:"carried_forward"`
 }
 
 // CoverageRow is one jurisdiction in the public coverage list.
@@ -256,6 +271,11 @@ func (c *Client) RevokeAPIKey(ctx context.Context, id string) error {
 // ListMembers lists the members.
 func (c *Client) ListMembers(ctx context.Context) ([]Member, error) {
 	return listAll[Member](ctx, c, base+"/members", nil, false)
+}
+
+// FindMembersByEmail returns the member with this address (an exact, case-insensitive match), or none.
+func (c *Client) FindMembersByEmail(ctx context.Context, email string) ([]Member, error) {
+	return listAll[Member](ctx, c, base+"/members", url.Values{"email": {email}}, false)
 }
 
 // GetMember reads a member by user id.

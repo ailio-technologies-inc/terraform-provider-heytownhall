@@ -92,6 +92,8 @@ type usageModel struct {
 	ProjectedCents  types.Int64     `tfsdk:"projected_cents"`
 	SpendCapCents   types.Int64     `tfsdk:"spend_cap_cents"`
 	CountedThrough  types.String    `tfsdk:"counted_through"`
+	MinimumInvoice  types.Int64     `tfsdk:"minimum_invoice_cents"`
+	CarriedForward  types.Int64     `tfsdk:"carried_forward_cents"`
 	Lines           []billLineModel `tfsdk:"lines"`
 }
 
@@ -105,12 +107,14 @@ func (d *usageDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, 
 				Description: "The month as `YYYY-MM`, in Vancouver time. Defaults to the current month.",
 				Validators:  []validator.String{stringvalidator.RegexMatches(regexp.MustCompile(`^[0-9]{4}-(0[1-9]|1[0-2])$`), "must be a month written YYYY-MM")},
 			},
-			"total_cents":      schema.Int64Attribute{Computed: true, Description: "The bill to date in US cents."},
-			"requests":         schema.Int64Attribute{Computed: true, Description: "Billed live requests so far."},
-			"sandbox_requests": schema.Int64Attribute{Computed: true, Description: "Sandbox requests so far. They are not billed."},
-			"projected_cents":  schema.Int64Attribute{Computed: true, Description: "The bill at this month's pace, to its last day. Null before any live request."},
-			"spend_cap_cents":  schema.Int64Attribute{Computed: true, Description: "The spending cap in US cents, or null for no cap."},
-			"counted_through":  schema.StringAttribute{Computed: true, Description: "The time up to which requests are counted (RFC 3339)."},
+			"total_cents":           schema.Int64Attribute{Computed: true, Description: "The bill to date in US cents."},
+			"requests":              schema.Int64Attribute{Computed: true, Description: "Billed live requests so far."},
+			"sandbox_requests":      schema.Int64Attribute{Computed: true, Description: "Sandbox requests so far. They are not billed."},
+			"projected_cents":       schema.Int64Attribute{Computed: true, Description: "The bill at this month's pace, to its last day. Null before any live request."},
+			"spend_cap_cents":       schema.Int64Attribute{Computed: true, Description: "The spending cap in US cents, or null for no cap."},
+			"counted_through":       schema.StringAttribute{Computed: true, Description: "The time up to which requests are counted (RFC 3339)."},
+			"minimum_invoice_cents": schema.Int64Attribute{Computed: true, Description: "The smallest amount the API invoices, in US cents. A month's bill below it is carried forward."},
+			"carried_forward_cents": schema.Int64Attribute{Computed: true, Description: "Earlier months' bills carried into this one, in US cents. Null when there is none."},
 			"lines": schema.ListNestedAttribute{
 				Computed:    true,
 				Description: "The bill by meter.",
@@ -144,7 +148,12 @@ func (d *usageDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 		ProjectedCents:  types.Int64PointerValue(u.ProjectedCents),
 		SpendCapCents:   types.Int64PointerValue(u.SpendCapCents),
 		CountedThrough:  types.StringPointerValue(u.CountedThrough),
+		MinimumInvoice:  types.Int64PointerValue(u.MinimumInvoiceCents),
+		CarriedForward:  types.Int64Null(),
 		Lines:           []billLineModel{},
+	}
+	if u.CarriedForward != nil {
+		m.CarriedForward = types.Int64Value(u.CarriedForward.Cents)
 	}
 	for _, l := range u.BillToDate.Lines {
 		m.Lines = append(m.Lines, billLineModel{types.StringValue(l.Meter), types.StringValue(l.Description), types.Int64Value(l.Requests), types.Int64Value(l.Cents)})
@@ -238,6 +247,7 @@ type memberItem struct {
 }
 
 type membersModel struct {
+	Email   types.String `tfsdk:"email"`
 	Members []memberItem `tfsdk:"members"`
 }
 
@@ -245,6 +255,7 @@ func (d *membersDataSource) Schema(_ context.Context, _ datasource.SchemaRequest
 	resp.Schema = schema.Schema{
 		Description: "The organisation's members, owners included. Use it to find a person's `user_id` by email for `heytownhall_member`.",
 		Attributes: map[string]schema.Attribute{
+			"email": schema.StringAttribute{Optional: true, Description: "Only the member with this email address (an exact match, case does not matter). The list is empty when there is none."},
 			"members": schema.ListNestedAttribute{
 				Computed:    true,
 				Description: "The members.",
@@ -260,13 +271,24 @@ func (d *membersDataSource) Schema(_ context.Context, _ datasource.SchemaRequest
 	}
 }
 
-func (d *membersDataSource) Read(ctx context.Context, _ datasource.ReadRequest, resp *datasource.ReadResponse) {
-	ms, err := d.c.ListMembers(ctx)
+func (d *membersDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
+	var cfg membersModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	var ms []client.Member
+	var err error
+	if cfg.Email.IsNull() || cfg.Email.IsUnknown() {
+		ms, err = d.c.ListMembers(ctx)
+	} else {
+		ms, err = d.c.FindMembersByEmail(ctx, cfg.Email.ValueString())
+	}
 	if err != nil {
 		apiDiag(&resp.Diagnostics, "Could not list members", err)
 		return
 	}
-	out := membersModel{Members: []memberItem{}}
+	out := membersModel{Email: cfg.Email, Members: []memberItem{}}
 	for _, m := range ms {
 		out.Members = append(out.Members, memberItem{types.StringValue(m.UserID), types.StringValue(m.Email), types.StringValue(m.Name), types.StringValue(m.Role), types.StringValue(m.JoinedAt)})
 	}

@@ -7,6 +7,7 @@ description: |-
   This is a separate resource, and not two arguments of heytownhall_sso_connection, because the API only enables a connection that has a verified domain. A verified domain needs the connection, so enabled on the connection itself would make a dependency loop. Here the chain is a line: connection, domain, DNS record, verification, activation.
   Enforcing sign-in (enforced = true) means that people with an address at one of the connection's verified domains can sign in only through the connection. Password, email-link and social sign-ins are refused for them, the non-SSO sessions of the organisation's non-owner members at those domains end when you enforce, and they are told by email. An owner of the organisation can still sign in with a password; each such sign-in is recorded and every owner is told by email. Enforced needs enabled.
   Scopes. Turning a connection on needs both sso:write and members:write on the token, because people who sign in through single sign-on join the organisation as members.
+  DNS is checked again. Enabling and enforcing make the API look for the domain's TXT record again. If the record has been removed, the API answers domain_not_verified, and the domain reads as unverified. Leave the record published for as long as the connection is in use.
   Destroying the resource disables the connection and stops enforcing it. Disabling a connection ends the sessions it opened.
 ---
 
@@ -19,6 +20,8 @@ This is a separate resource, and not two arguments of `heytownhall_sso_connectio
 **Enforcing** sign-in (`enforced = true`) means that people with an address at one of the connection's verified domains can sign in only through the connection. Password, email-link and social sign-ins are refused for them, the non-SSO sessions of the organisation's non-owner members at those domains end when you enforce, and they are told by email. An owner of the organisation can still sign in with a password; each such sign-in is recorded and every owner is told by email. Enforced needs enabled.
 
 **Scopes.** Turning a connection on needs both `sso:write` and `members:write` on the token, because people who sign in through single sign-on join the organisation as members.
+
+**DNS is checked again.** Enabling and enforcing make the API look for the domain's TXT record again. If the record has been removed, the API answers `domain_not_verified`, and the domain reads as unverified. Leave the record published for as long as the connection is in use.
 
 Destroying the resource disables the connection and stops enforcing it. Disabling a connection ends the sessions it opened.
 

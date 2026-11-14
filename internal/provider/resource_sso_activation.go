@@ -47,6 +47,7 @@ func (r *ssoActivationResource) Schema(_ context.Context, _ resource.SchemaReque
 			"Password, email-link and social sign-ins are refused for them, the non-SSO sessions of the organisation's non-owner members at those domains end when you enforce, and they are told by email. An owner of the organisation can still sign in with a password; each such sign-in is recorded and every owner is told by email. " +
 			"Enforced needs enabled.\n\n" +
 			"**Scopes.** Turning a connection on needs both `sso:write` and `members:write` on the token, because people who sign in through single sign-on join the organisation as members.\n\n" +
+			"**DNS is checked again.** Enabling and enforcing make the API look for the domain's TXT record again. If the record has been removed, the API answers `domain_not_verified`, and the domain reads as unverified. Leave the record published for as long as the connection is in use.\n\n" +
 			"Destroying the resource disables the connection and stops enforcing it. Disabling a connection ends the sessions it opened.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{

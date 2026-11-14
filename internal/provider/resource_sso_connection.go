@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -37,6 +38,12 @@ type ssoConnectionModel struct {
 	TrustUnverifiedEmail  types.Bool   `tfsdk:"trust_unverified_email"`
 	RedirectURI           types.String `tfsdk:"redirect_uri"`
 	ClientSecretUpdatedAt types.String `tfsdk:"client_secret_updated_at"`
+	Discovery             types.Object `tfsdk:"discovery"`
+}
+
+var discoveryTypes = map[string]attr.Type{
+	"authorization_endpoint": types.StringType, "token_endpoint": types.StringType, "jwks_uri": types.StringType,
+	"token_endpoint_auth_method": types.StringType, "refreshed_at": types.StringType,
 }
 
 func (r *ssoConnectionResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -90,7 +97,18 @@ func (r *ssoConnectionResource) Schema(_ context.Context, _ resource.SchemaReque
 				Description:   "Whether the provider's email address is accepted without an `email_verified` claim (Microsoft Entra needs it). Read-only here: an owner sets it in the dashboard, because a token may not.",
 				PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
 			},
-			"redirect_uri":             schema.StringAttribute{Computed: true, Description: "The redirect URI to register with the identity provider.", PlanModifiers: computed},
+			"redirect_uri": schema.StringAttribute{Computed: true, Description: "The redirect URI to register with the identity provider.", PlanModifiers: computed},
+			"discovery": schema.SingleNestedAttribute{
+				Computed:    true,
+				Description: "What the API read from the identity provider's discovery document when the connection was made. Read-only. It changes only when someone refreshes the connection in the dashboard or the API.",
+				Attributes: map[string]schema.Attribute{
+					"authorization_endpoint":     schema.StringAttribute{Computed: true, Description: "The provider's authorization endpoint."},
+					"token_endpoint":             schema.StringAttribute{Computed: true, Description: "The provider's token endpoint."},
+					"jwks_uri":                   schema.StringAttribute{Computed: true, Description: "The URL of the provider's signing keys."},
+					"token_endpoint_auth_method": schema.StringAttribute{Computed: true, Description: "How the API authenticates to the token endpoint: `client_secret_basic` or `client_secret_post`."},
+					"refreshed_at":               schema.StringAttribute{Computed: true, Description: "When the discovery document was last read (RFC 3339)."},
+				},
+			},
 			"client_secret_updated_at": schema.StringAttribute{Computed: true, Description: "When the API last stored a client secret for this connection (RFC 3339). A value later than the last apply means the secret was changed outside Terraform.", PlanModifiers: []planmodifier.String{}},
 		},
 	}
@@ -109,6 +127,17 @@ func (m *ssoConnectionModel) set(c *client.SSOConnection) {
 	m.TrustUnverifiedEmail = types.BoolValue(c.TrustUnverifiedEmail)
 	m.RedirectURI = types.StringValue(c.RedirectURI)
 	m.ClientSecretUpdatedAt = types.StringPointerValue(c.ClientSecretUpdated)
+	if c.Discovery != nil {
+		m.Discovery = types.ObjectValueMust(discoveryTypes, map[string]attr.Value{
+			"authorization_endpoint":     types.StringValue(c.Discovery.AuthorizationEndpoint),
+			"token_endpoint":             types.StringValue(c.Discovery.TokenEndpoint),
+			"jwks_uri":                   types.StringValue(c.Discovery.JWKSURI),
+			"token_endpoint_auth_method": types.StringValue(c.Discovery.TokenEndpointAuthMethod),
+			"refreshed_at":               types.StringValue(c.Discovery.RefreshedAt),
+		})
+	} else {
+		m.Discovery = types.ObjectNull(discoveryTypes)
+	}
 }
 
 func (r *ssoConnectionResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {

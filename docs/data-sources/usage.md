@@ -35,8 +35,10 @@ output "bill_to_date_dollars" {
 
 ### Read-Only
 
+- `carried_forward_cents` (Number) Earlier months' bills carried into this one, in US cents. Null when there is none.
 - `counted_through` (String) The time up to which requests are counted (RFC 3339).
 - `lines` (Attributes List) The bill by meter. (see [below for nested schema](#nestedatt--lines))
+- `minimum_invoice_cents` (Number) The smallest amount the API invoices, in US cents. A month's bill below it is carried forward.
 - `projected_cents` (Number) The bill at this month's pace, to its last day. Null before any live request.
 - `requests` (Number) Billed live requests so far.
 - `sandbox_requests` (Number) Sandbox requests so far. They are not billed.

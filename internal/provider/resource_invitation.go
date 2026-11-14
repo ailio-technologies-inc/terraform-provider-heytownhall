@@ -49,6 +49,7 @@ func (r *invitationResource) Schema(_ context.Context, _ resource.SchemaRequest,
 			"* **Accepted.** The resource stays in the state with `status = \"accepted\"` and Terraform plans nothing. The person is now a member. To manage their role, add a `heytownhall_member` (see the example). Destroying an accepted invitation does not remove the member.\n" +
 			"* **Expired, cancelled, or rejected.** The resource leaves the state, so the next plan creates a new invitation and sends a new email. Remove the resource from the configuration if you do not want that.\n" +
 			"* **Pending.** Destroying the resource cancels the invitation.\n\n" +
+			"An organisation can hold 100 pending invitations and send 50 a day. Past either limit the API refuses, and the error is shown at once, without a retry; the daily limit clears as invitations pass 24 hours old. Inviting someone who was removed from the organisation lets them back in.\n\n" +
 			"Changing `email` or `role` replaces the invitation (the old one is cancelled, a new email is sent).",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{

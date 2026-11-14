@@ -86,6 +86,7 @@ type Fake struct {
 	liveOpen   bool
 
 	// propagateAfter simulates DNS propagation: the record counts as found once a domain has been checked more than this many times. -1 = never.
+	inviteBudget   int // when > 0, the invitations an organisation may send before the daily budget is spent
 	propagateAfter int
 	checks         map[string]int
 }
@@ -130,6 +131,9 @@ func (f *Fake) DropNextCreateResponse() { f.mu.Lock(); f.dropCreate = true; f.mu
 
 // SetLiveOpen says whether live keys may be created.
 func (f *Fake) SetLiveOpen(v bool) { f.mu.Lock(); f.liveOpen = v; f.mu.Unlock() }
+
+// SetInviteBudget makes the fake refuse (429 rate_limited, as the real API does for its daily budget) once this many invitations exist.
+func (f *Fake) SetInviteBudget(n int) { f.mu.Lock(); f.inviteBudget = n; f.mu.Unlock() }
 
 // PropagateAfter makes the verifier find any domain's record once the domain has been checked more than n times.
 func (f *Fake) PropagateAfter(n int) { f.mu.Lock(); f.propagateAfter = n; f.mu.Unlock() }
@@ -634,7 +638,16 @@ func (f *Fake) members_(w http.ResponseWriter, r *http.Request, rest []string) {
 			apiErr(w, 405, "method_not_allowed", "Method not allowed.", "")
 			return
 		}
-		f.paginate(w, r, len(f.members), "data", func(i int) any { return memberJSON(f.members[i]) })
+		list := f.members
+		if e := r.URL.Query().Get("email"); e != "" {
+			list = nil
+			for _, m := range f.members {
+				if strings.EqualFold(m.Email, e) {
+					list = append(list, m)
+				}
+			}
+		}
+		f.paginate(w, r, len(list), "data", func(i int) any { return memberJSON(list[i]) })
 		return
 	}
 	i, m := f.findMember(rest[0])
@@ -705,6 +718,9 @@ func (f *Fake) invitations(w http.ResponseWriter, r *http.Request, rest []string
 					if strings.EqualFold(mm.Email, email) {
 						return 409, errBody("conflict", "That person is already a member.", "email")
 					}
+				}
+				if f.inviteBudget > 0 && len(f.invites) >= f.inviteBudget {
+					return 429, errBody("rate_limited", "An organisation can send 50 invitations in 24 hours. Try again later.", "")
 				}
 				for _, ii := range f.invites {
 					if ii.Status == "pending" && ii.Email == email {
@@ -781,7 +797,7 @@ func (f *Fake) usage(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"usage": map[string]any{
 		"month": month, "days": []any{},
 		"bill_to_date":    map[string]any{"lines": []any{map[string]any{"meter": "records", "description": "Records", "requests": 12000, "cents": 480}, map[string]any{"meter": "search", "description": "Search", "requests": 300, "cents": 60}}, "total_cents": 540, "requests": 12300},
-		"projected_cents": 1800, "sandbox_requests": 42, "spend_cap_cents": f.capCents, "counted_through": "2026-11-14T10:00:00Z",
+		"projected_cents": 1800, "minimum_invoice_cents": 500, "carried_forward": map[string]any{"cents": 120, "requests": 4000, "months": []string{"2026-10"}}, "sandbox_requests": 42, "spend_cap_cents": f.capCents, "counted_through": "2026-11-14T10:00:00Z",
 	}})
 }
 
@@ -829,7 +845,8 @@ func (f *Fake) connJSON(c *connection) map[string]any {
 		"id": c.ID, "name": c.Name, "protocol": "oidc", "issuer": c.Issuer,
 		"client_id": c.ClientID, "client_secret_set": true, "client_secret_updated_at": nil, "email_claim": c.EmailClaim, "trust_unverified_email": c.Trust,
 		"enabled": c.Enabled, "enforced": c.Enforced, "redirect_uri": "https://data.heytownhall.com/api/auth/sso/callback",
-		"domains": ds, "created_at": ts(c.CreatedAt), "updated_at": ts(c.CreatedAt),
+		"discovery": map[string]any{"authorization_endpoint": c.Issuer + "/authorize", "token_endpoint": c.Issuer + "/token", "jwks_uri": c.Issuer + "/keys", "token_endpoint_auth_method": "client_secret_basic", "refreshed_at": ts(c.CreatedAt)},
+		"domains":   ds, "created_at": ts(c.CreatedAt), "updated_at": ts(c.CreatedAt),
 	}
 }
 

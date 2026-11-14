@@ -796,6 +796,9 @@ func TestAccSSO_connectionUpdatesInPlace(t *testing.T) {
 			// The owner sets these in the dashboard; the provider only shows them.
 			resource.TestCheckResourceAttr("heytownhall_sso_connection.c", "email_claim", "email"),
 			resource.TestCheckResourceAttr("heytownhall_sso_connection.c", "trust_unverified_email", "false"),
+			resource.TestCheckResourceAttr("heytownhall_sso_connection.c", "discovery.token_endpoint", "https://login.entra.test/token"),
+			resource.TestCheckResourceAttr("heytownhall_sso_connection.c", "discovery.token_endpoint_auth_method", "client_secret_basic"),
+			resource.TestCheckResourceAttrSet("heytownhall_sso_connection.c", "discovery.refreshed_at"),
 		)},
 		{
 			PreConfig: func() { f.SetClaimSettings("upn", true) },
@@ -854,6 +857,8 @@ data "heytownhall_usage" "now" {}
 data "heytownhall_usage" "oct" { month = "2026-10" }
 data "heytownhall_api_keys" "all" { depends_on = [heytownhall_api_key.a, heytownhall_api_key.b, heytownhall_api_key.c] }
 data "heytownhall_members" "all" {}
+data "heytownhall_members" "ana" { email = "ANA@acme.test" }
+data "heytownhall_members" "nobody" { email = "nobody@acme.test" }
 data "heytownhall_management_tokens" "all" {}
 data "heytownhall_token" "self" {}
 data "heytownhall_coverage" "all" {}
@@ -873,6 +878,11 @@ data "heytownhall_coverage" "us" { country = "US" }
 			resource.TestCheckResourceAttr("data.heytownhall_api_keys.all", "keys.#", "3"), // three pages of size two: pagination works
 			resource.TestCheckResourceAttr("data.heytownhall_members.all", "members.#", "2"),
 			resource.TestCheckResourceAttr("data.heytownhall_members.all", "members.0.role", "owner"),
+			resource.TestCheckResourceAttr("data.heytownhall_members.ana", "members.#", "1"),
+			resource.TestCheckResourceAttr("data.heytownhall_members.ana", "members.0.email", "ana@acme.test"),
+			resource.TestCheckResourceAttr("data.heytownhall_members.nobody", "members.#", "0"),
+			resource.TestCheckResourceAttr("data.heytownhall_usage.now", "minimum_invoice_cents", "500"),
+			resource.TestCheckResourceAttr("data.heytownhall_usage.now", "carried_forward_cents", "120"),
 			resource.TestCheckResourceAttr("data.heytownhall_management_tokens.all", "tokens.#", "3"),
 			resource.TestCheckResourceAttr("data.heytownhall_management_tokens.all", "tokens.0.scopes.0", "keys:write"),
 			resource.TestCheckResourceAttr("data.heytownhall_management_tokens.all", "tokens.1.revoked_at", "2026-10-20T00:00:00Z"),
@@ -921,4 +931,31 @@ func TestAccDataSource_usageRejectsBadMonth(t *testing.T) {
 	accTest(t, resource.TestCase{Steps: []resource.TestStep{{
 		Config: cfg(`data "heytownhall_usage" "u" { month = "November" }`), ExpectError: rx(`YYYY-MM`),
 	}}})
+}
+
+func TestAccInvitation_dailyBudgetIsShownAndNotRetried(t *testing.T) {
+	f, cfg := withFake(t)
+	f.SetInviteBudget(1)
+	f.AddMember("filler@acme.test", "member")
+	// One invitation already counts against the budget.
+	accTest(t, resource.TestCase{Steps: []resource.TestStep{{
+		Config: cfg(`
+resource "heytownhall_invitation" "a" {
+  email = "a@acme.test"
+}
+resource "heytownhall_invitation" "b" {
+  email      = "b@acme.test"
+  depends_on = [heytownhall_invitation.a]
+}`),
+		ExpectError: rx(`(?s)rate_limited.*50\s+invitations`),
+	}}})
+	posts := 0
+	for _, r := range f.Requests() {
+		if r.Method == "POST" && r.Path == "/v1/management/invitations" {
+			posts++
+		}
+	}
+	if posts != 2 {
+		t.Errorf("want 2 invitation creates (one sent, one refused and not retried), saw %d", posts)
+	}
 }

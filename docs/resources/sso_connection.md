@@ -56,10 +56,22 @@ output "redirect_uri" {
 ### Read-Only
 
 - `client_secret_updated_at` (String) When the API last stored a client secret for this connection (RFC 3339). A value later than the last apply means the secret was changed outside Terraform.
+- `discovery` (Attributes) What the API read from the identity provider's discovery document when the connection was made. Read-only. It changes only when someone refreshes the connection in the dashboard or the API. (see [below for nested schema](#nestedatt--discovery))
 - `email_claim` (String) The ID token claim that holds the person's email address: `email`, `preferred_username` or `upn`. Read-only here: an owner sets it in the dashboard, because a token may not.
 - `id` (String) The connection's id.
 - `redirect_uri` (String) The redirect URI to register with the identity provider.
 - `trust_unverified_email` (Boolean) Whether the provider's email address is accepted without an `email_verified` claim (Microsoft Entra needs it). Read-only here: an owner sets it in the dashboard, because a token may not.
+
+<a id="nestedatt--discovery"></a>
+### Nested Schema for `discovery`
+
+Read-Only:
+
+- `authorization_endpoint` (String) The provider's authorization endpoint.
+- `jwks_uri` (String) The URL of the provider's signing keys.
+- `refreshed_at` (String) When the discovery document was last read (RFC 3339).
+- `token_endpoint` (String) The provider's token endpoint.
+- `token_endpoint_auth_method` (String) How the API authenticates to the token endpoint: `client_secret_basic` or `client_secret_post`.
 
 ## Import
 
