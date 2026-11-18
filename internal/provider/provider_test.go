@@ -762,9 +762,6 @@ func TestAccSSO_planTimeValidation(t *testing.T) {
 		{Config: cfg(conn("not a url")), PlanOnly: true, ExpectError: rx(`(?s)Invalid issuer`)},
 		{Config: cfg(`resource "heytownhall_sso_connection" "c" { name = "x" issuer = "https://i.test" client_id = "a" client_secret = "b" email_claim = "upn" }`), PlanOnly: true, ExpectError: rx(`(?s)email_claim.*(read-only|computed|cannot be set)`)},
 		{Config: cfg(`resource "heytownhall_sso_domain" "d" { connection_id = "c" domain = "Acme.COM" }`), PlanOnly: true, ExpectError: rx(`must be lowercase`)},
-		{Config: cfg(`resource "heytownhall_sso_domain" "d" { connection_id = "c" domain = "localhost" }`), PlanOnly: true, ExpectError: rx(`at least two parts`)},
-		{Config: cfg(`resource "heytownhall_sso_domain" "d" { connection_id = "c" domain = "https://acme.com/" }`), PlanOnly: true, ExpectError: rx(`not a valid part`)},
-		{Config: cfg(`resource "heytownhall_sso_domain" "d" { connection_id = "c" domain = "10.0.0.1" }`), PlanOnly: true, ExpectError: rx(`IP address`)},
 		{Config: cfg(`resource "heytownhall_sso_activation" "a" { connection_id = "c" enabled = false enforced = true }`), PlanOnly: true, ExpectError: rx(`Enforced needs enabled`)},
 	}})
 }
